@@ -1,0 +1,9 @@
+numpy
+streamlit
+plotly
+rasterio
+scipy
+fastapi
+uvicorn[standard]
+pydantic>=2
+geopandas

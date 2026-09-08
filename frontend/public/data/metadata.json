@@ -1,0 +1,48 @@
+{
+  "source": "E:\\FILES\\SIH\\SNAPHU_Data",
+  "outputs": {
+    "cog": "E:\\FILES\\SIH\\AI_Displacement_Dataset\\displacement_cm_cog.tif",
+    "png_overlay": "E:\\FILES\\SIH\\AI_Displacement_Dataset\\displacement_overlay.png",
+    "train_images": "E:\\FILES\\SIH\\AI_Displacement_Dataset\\train_images",
+    "train_labels": "E:\\FILES\\SIH\\AI_Displacement_Dataset\\train_labels"
+  },
+  "shape": {
+    "rows": 9570,
+    "columns": 26710
+  },
+  "units": "centimeters",
+  "wavelength_m": 0.055465763,
+  "formula": "phase * wavelength / (-4 * pi) * 100",
+  "global_valid_min_cm": -8.434430122375488,
+  "global_valid_max_cm": 2.6552089691162024,
+  "normalization": {
+    "method": "min_max",
+    "min_cm": -8.434430122375488,
+    "max_cm": 2.6552089691162024,
+    "percentiles_used": [
+      1,
+      99
+    ]
+  },
+  "patches": {
+    "count": 5980,
+    "size": 256,
+    "overlap": 0.2,
+    "stride": 205,
+    "min_valid_fraction": 0.95
+  },
+  "pixel_resolution": {
+    "x": 1.0,
+    "y": 1.0
+  },
+  "crs": null,
+  "bbox_latlon": {
+    "min_latitude": 22.312,
+    "max_latitude": 22.378,
+    "min_longitude": 82.635,
+    "max_longitude": 82.725,
+    "center": [22.345, 82.68]
+  },
+  "bbox_is_approximate_tie_point_extent": true,
+  "warning": "Latitude/longitude are unavailable or approximate because the SNAPHU raster headers contain no full-resolution CRS/map info."
+}
