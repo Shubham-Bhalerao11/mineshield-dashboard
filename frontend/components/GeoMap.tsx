@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CircleMarker, ImageOverlay, MapContainer, TileLayer, useMap, useMapEvents, Tooltip } from "react-leaflet";
-import type { LatLngBoundsExpression } from "leaflet";
+import { CircleMarker, ImageOverlay, MapContainer, Popup, TileLayer, useMap, useMapEvents, Tooltip } from "react-leaflet";
+import type { LatLngBoundsExpression, Popup as LeafletPopup } from "leaflet";
 import { Crosshair, Layers, MapPin } from "lucide-react";
 import "leaflet/dist/leaflet.css";
 
 export type Bounds = { west: number; south: number; east: number; north: number };
 export type MeshNode = { id: string; lat: number; lon: number; tilt_deg: number; tension_mm: number; vibration_hz: number; battery_mv: number; rssi_dbm: number; status: "NOMINAL" | "ADVISORY" | "CRITICAL"; last_packet: string };
-export type GeoMapProps = { bounds: Bounds; nodes?: MeshNode[]; onSelect?: (node: MeshNode | null) => void; onInspect?: (point: [number, number]) => void };
+export type GeoMapProps = { bounds: Bounds; nodes?: MeshNode[]; onSelect?: (node: MeshNode | null) => void; onInspect?: (point: [number, number]) => void; focusPoint?: [number, number] | null };
 
 function ClickCapture({ onMapClick }: { onMapClick: (point: [number, number]) => void }) {
   useMapEvents({ click: (event) => onMapClick([event.latlng.lat, event.latlng.lng]) });
@@ -22,11 +22,26 @@ function FitMetadataBounds({ bounds }: { bounds: LatLngBoundsExpression }) {
   return null;
 }
 
+function FocusLocation({ point }: { point: [number, number] | null | undefined }) {
+  const map = useMap();
+  const popupRef = useRef<LeafletPopup | null>(null);
+  useEffect(() => {
+    if (point) {
+      map.flyTo(point, 16, { duration: 1.5 });
+      window.setTimeout(() => popupRef.current?.openOn(map), 250);
+    }
+  }, [map, point]);
+  if (!point) return null;
+  return <CircleMarker center={point} radius={18} pathOptions={{ color: "#ef4444", weight: 3, fillOpacity: 0, className: "radar-ping" }}>
+    <Popup ref={popupRef}>Hazard: Active Crack Propagation<br />Strain: Critical</Popup>
+  </CircleMarker>;
+}
+
 function threat(csri: number) {
   return csri >= .88 ? "critical" : csri >= .45 ? "warning" : "safe";
 }
 
-export default function GeoMap({ bounds, nodes = [], onSelect, onInspect }: GeoMapProps) {
+export default function GeoMap({ bounds, nodes = [], onSelect, onInspect, focusPoint }: GeoMapProps) {
   const [opacity, setOpacity] = useState(.75);
   const [showMesh, setShowMesh] = useState(false);
   const [mode, setMode] = useState<"scientific" | "satellite">("satellite");
@@ -42,9 +57,10 @@ export default function GeoMap({ bounds, nodes = [], onSelect, onInspect }: GeoM
     <div className="map-canvas">
       <MapContainer center={center} bounds={leafletBounds} scrollWheelZoom zoomControl={false} className="leaflet-map">
         <FitMetadataBounds bounds={leafletBounds} />
-        {mode === "satellite" && <TileLayer attribution="Tiles &copy; Esri" url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />}
+        {mode === "satellite" && <TileLayer attribution="&copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community" url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />}
         <ImageOverlay className="displacement-overlay" url="/data/displacement_overlay.png" bounds={leafletBounds} opacity={mode === "scientific" ? 1 : opacity} interactive />
         <ClickCapture onMapClick={(point) => { setClicked(point); onInspect?.(point); }} />
+        <FocusLocation point={focusPoint} />
         {clicked && <CircleMarker center={clicked} radius={10} pathOptions={{ color: "#00e5ff", weight: 3, fillOpacity: 0 }}><Tooltip permanent direction="top">PIXEL INSPECT</Tooltip></CircleMarker>}
         {showMesh && nodePositions.map((node) => <CircleMarker key={node.id} center={[node.lat!, node.lon!]} radius={8} pathOptions={{ color: node.status === "CRITICAL" ? "#ff3d71" : node.status === "ADVISORY" ? "#ffb300" : "#10b981", fillOpacity: .85 }} eventHandlers={{ click: () => onSelect?.(node) }}><Tooltip direction="top" offset={[0, -8]}>{node.id} · {node.status}<br />Tilt {node.tilt_deg}° · Tension {node.tension_mm} mm</Tooltip></CircleMarker>)}
       </MapContainer>

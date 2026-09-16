@@ -5,14 +5,16 @@ Run with: python backend_server.py
 from __future__ import annotations
 
 import json
+import asyncio
 import math
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import rasterio
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 ROOT = Path(__file__).resolve().parent
@@ -43,6 +45,83 @@ def displacement_at(lat: float, lon: float) -> float:
         column = int(np.clip(lon_ratio * (source.width - 1), 0, source.width - 1))
         value = source.read(1, window=((row, row + 1), (column, column + 1)), masked=True)[0, 0]
         return round(float(value) if not np.ma.is_masked(value) else fallback, 3)
+
+
+def live_payload() -> dict[str, Any]:
+    """Build the dashboard WebSocket payload from deterministic sensor signals."""
+    tick = int(time.time())
+    phase = tick * 0.08
+    sensor_definitions = (
+        ("N-09", 22.322, 82.645, 0.50, 1.20, 1.00),
+        ("N-12", 22.337, 82.667, 0.80, 2.10, 1.50),
+        ("N-17", 22.352, 82.689, 1.40, 3.80, 4.20),
+        ("N-21", 22.367, 82.711, 0.20, 0.50, 0.20),
+    )
+    nodes = []
+    for index, (node_id, lat, lon, tilt, vibration, crack) in enumerate(sensor_definitions):
+        displacement = abs(displacement_at(lat, lon))
+        evolution = math.sin(phase + index * 0.9)
+        nodes.append({
+            "id": node_id,
+            "tilt": round(max(0.05, tilt + 0.08 * evolution), 2),
+            "vib": round(max(0.1, vibration + 0.25 * evolution), 2),
+            "disp": round(max(0.1, displacement + 10.0 + index * 3.0 + evolution), 1),
+            "crack": round(max(0.05, crack + 0.12 * evolution), 2),
+        })
+
+    timestamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    seconds = tick % 3600
+    received = 12486 + seconds
+    risk = round(18.0 + 1.5 * math.sin(phase / 2), 1)
+    return {
+        "system_status": {"online": True, "timestamp": timestamp},
+        "alert": {
+            "active": True,
+            "type": "Rock Fall / Crack Propagation",
+            "node": "N-17",
+            "zone": "Zone B (Lat 18.4567, Long 73.8567)",
+            "description": "Crack propagation detected in roof section",
+        },
+        "mine_overview": {
+            "status": "NORMAL",
+            "active_alerts": 2,
+            "nodes_online": 38,
+            "total_nodes": 40,
+            "personnel": 126,
+        },
+        "communications": {
+            "received": received,
+            "lost_pct": round(0.8 + 0.1 * math.sin(phase), 1),
+            "last_packet_sec": 1,
+        },
+        "danger_meter": {"risk_pct": risk, "trend": "Increasing"},
+        "environment": {
+            "methane": round(0.42 + 0.02 * math.sin(phase), 2),
+            "temperature": round(29.4 + 0.3 * math.sin(phase / 2), 1),
+            "humidity": round(78.0 + 1.0 * math.cos(phase / 2), 1),
+            "co_ppm": round(12.0 + 0.5 * math.sin(phase), 1),
+            "air_quality": "Normal",
+        },
+        "personnel": {"normal": 118, "caution": 6, "unaccounted": 2},
+        "network": {"online": 37, "weak": 2, "offline": 1, "lora_health": 96},
+        "live_sensors": {
+            "time_label": datetime.now().strftime("%H:%M:%S"),
+            "nodes": nodes,
+        },
+    }
+
+
+@app.websocket("/ws/live")
+async def live_websocket(websocket: WebSocket) -> None:
+    await websocket.accept()
+    try:
+        while True:
+            await websocket.send_json(live_payload())
+            await asyncio.sleep(1)
+    except WebSocketDisconnect:
+        return
+    except (RuntimeError, asyncio.CancelledError):
+        return
 
 
 @app.get("/api/v1/system/status")
